@@ -911,6 +911,7 @@ Examples: 'severity.desc', 'timestamp.desc'
 • Product: product:'epp' | product:'idp' | product:'xdr' | product:'overwatch' (see field table for all)
 • Assignment: assigned_to_name:!'*' (unassigned) | assigned_to_name:'user.name'
 • Timestamps: created_timestamp:>'2025-01-01T00:00:00Z' | created_timestamp:>='date1'+created_timestamp:<='date2'
+  Relative dates supported: timestamp:>'now-24h' | timestamp:>'now-7d' | timestamp:>'now-30d' (lowercase 'now', quoted)
 • Wildcards: name:'EICAR*' | description:'*credential*' | agent_id:'77d11725*' | pattern_id:'301*'
 • Combinations: status:'new'+severity_name:'High'+product:'epp' | status:'new'+severity:>=70+product:'epp' | product:'epp',product:'xdr'
 
