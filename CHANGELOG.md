@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.0](https://github.com/CrowdStrike/falcon-mcp/compare/v0.11.0...v0.12.0) (2026-06-05)
+
+
+### Features
+
+* **modules/exclusions:** add unified Exclusions module ([#437](https://github.com/CrowdStrike/falcon-mcp/issues/437)) ([b9b7ea6](https://github.com/CrowdStrike/falcon-mcp/commit/b9b7ea611f7f18be4c2e5e8e29db1578a7d2c84d))
+* **modules/host-groups:** add Host Groups module ([#431](https://github.com/CrowdStrike/falcon-mcp/issues/431)) ([5b6e2af](https://github.com/CrowdStrike/falcon-mcp/commit/5b6e2afdfc5dddd032130870e84bce41e23ba234))
+
 ## [0.11.0](https://github.com/CrowdStrike/falcon-mcp/compare/v0.10.0...v0.11.0) (2026-06-03)
 
 
