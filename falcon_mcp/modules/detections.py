@@ -9,6 +9,7 @@ from typing import Any
 
 from mcp.server import FastMCP
 from mcp.server.fastmcp.resources import TextResource
+from mcp.types import ToolAnnotations
 from pydantic import AnyUrl, Field
 
 from falcon_mcp.common.logging import get_logger
@@ -39,6 +40,18 @@ class DetectionsModule(BaseModule):
             server=server,
             method=self.get_detection_details,
             name="get_detection_details",
+        )
+
+        self._add_tool(
+            server=server,
+            method=self.update_detections,
+            name="update_detections",
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=False,
+                idempotentHint=True,
+                openWorldHint=True,
+            ),
         )
 
     def register_resources(self, server: FastMCP) -> None:
@@ -170,3 +183,122 @@ class DetectionsModule(BaseModule):
             id_key="composite_ids",
             include_hidden=include_hidden,
         )
+
+    def update_detections(
+        self,
+        ids: list[str] = Field(
+            description="Composite detection ID(s) to update. Get these from `falcon_search_detections` or `falcon_get_detection_details`.",
+        ),
+        status: str | None = Field(
+            default=None,
+            description=(
+                "New status for the detection(s). Valid values: 'new', 'in_progress', "
+                "'true_positive', 'false_positive', 'ignored', 'closed', 'reopened'."
+            ),
+        ),
+        comment: str | None = Field(
+            default=None,
+            description=(
+                "Comment to append to the detection's audit trail. Strongly recommended "
+                "when changing status — explains the triage decision."
+            ),
+        ),
+        assigned_to_uuid: str | None = Field(
+            default=None,
+            description=(
+                "Falcon user UUID to assign the detection(s) to. Use empty string to unassign. "
+                "If you only have a username/email, you must resolve the UUID separately — "
+                "this API does not accept usernames."
+            ),
+        ),
+        show_in_ui: bool | None = Field(
+            default=None,
+            description=(
+                "Whether the detection(s) should appear in the Falcon UI. "
+                "Set to False to hide noisy or duplicated detections."
+            ),
+        ),
+        tags_to_add: list[str] | None = Field(
+            default=None,
+            description="Tag values to add to the detection(s).",
+        ),
+        tags_to_remove: list[str] | None = Field(
+            default=None,
+            description="Tag values to remove from the detection(s).",
+        ),
+    ) -> list[dict[str, Any]] | dict[str, Any]:
+        """Update one or more detections (status, comment, assignee, visibility, tags).
+
+        Wraps the Alerts v3 PATCH endpoint (`PatchEntitiesAlertsV3`). Common workflows:
+
+        - **Close a benign detection**: status='closed' + comment='Ignored — benign activity per DLP triage policy'
+        - **Assign for investigation**: status='in_progress' + assigned_to_uuid=<analyst uuid> + comment='Assigned to ...'
+        - **Hide noisy duplicates**: show_in_ui=False + comment='Suppressed — duplicate of ...'
+
+        At least one of status/comment/assigned_to_uuid/show_in_ui/tags_to_add/tags_to_remove
+        must be provided. All updates apply to every ID in `ids`.
+        """
+        action_parameters: list[dict[str, str]] = []
+
+        if status is not None:
+            action_parameters.append({"name": "update_status", "value": status})
+        if comment is not None:
+            action_parameters.append({"name": "append_comment", "value": comment})
+        if assigned_to_uuid is not None:
+            # Per the API contract: empty string unassigns.
+            action_parameters.append(
+                {"name": "assign_to_uuid", "value": assigned_to_uuid}
+            )
+        if show_in_ui is not None:
+            action_parameters.append(
+                {"name": "show_in_ui", "value": "true" if show_in_ui else "false"}
+            )
+        if tags_to_add:
+            for tag in tags_to_add:
+                action_parameters.append({"name": "add_tag", "value": tag})
+        if tags_to_remove:
+            for tag in tags_to_remove:
+                action_parameters.append({"name": "remove_tag", "value": tag})
+
+        if not action_parameters:
+            return [
+                {
+                    "error": (
+                        "No update fields provided. Supply at least one of: status, "
+                        "comment, assigned_to_uuid, show_in_ui, tags_to_add, tags_to_remove."
+                    ),
+                    "operation": "PatchEntitiesAlertsV3",
+                }
+            ]
+
+        body = {
+            "composite_ids": ids,
+            "action_parameters": action_parameters,
+        }
+
+        logger.debug(
+            "Updating %d detection(s) with action_parameters=%s",
+            len(ids),
+            action_parameters,
+        )
+
+        result = self._base_query_api_call(
+            operation="PatchEntitiesAlertsV3",
+            body_params=body,
+            error_message="Failed to update detections",
+            default_result=[],
+        )
+
+        if self._is_error(result):
+            return [result]
+
+        # The API returns an empty body on success; surface a useful confirmation.
+        if not result:
+            return [
+                {
+                    "status": "ok",
+                    "updated_ids": ids,
+                    "applied": action_parameters,
+                }
+            ]
+        return result
